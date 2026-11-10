@@ -3,12 +3,15 @@ package dsp.ex1.worker;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
 
-import java.io.File;
+import java.awt.image.BufferedImage;
 
-/** Thin wrapper around Tesseract. Requires the native tesseract-ocr package and its language data. */
+/**
+ * Thin wrapper around Tesseract. Requires the native tesseract-ocr package and its language data.
+ * Not thread-safe: use one instance per thread.
+ */
 public class OcrService {
 
-    /** Override with env var TESSDATA_PREFIX if tessdata lives elsewhere on the machine. */
+    /** Default tessdata location on Ubuntu/Debian; override with env var TESSDATA_PREFIX. */
     private static final String DEFAULT_TESSDATA = "/usr/share/tesseract-ocr/5/tessdata";
 
     private final Tesseract tesseract = new Tesseract();
@@ -19,7 +22,7 @@ public class OcrService {
         tesseract.setLanguage("eng");
     }
 
-    public String extractText(File image) throws TesseractException {
+    public String extractText(BufferedImage image) throws TesseractException {
         return tesseract.doOCR(image).trim();
     }
 }
