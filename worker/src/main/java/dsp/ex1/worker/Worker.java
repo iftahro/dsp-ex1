@@ -2,6 +2,8 @@ package dsp.ex1.worker;
 
 import dsp.ex1.common.AwsClients;
 import dsp.ex1.common.Config;
+import dsp.ex1.common.Ec2Instances;
+import dsp.ex1.common.InstanceMetadata;
 import dsp.ex1.common.Json;
 import dsp.ex1.common.messages.ImageTask;
 import dsp.ex1.common.messages.OcrResult;
@@ -19,7 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 /**
- * Runs on EC2 (tag Role=worker). Stateless loop, one image at a time:
+ * Runs on EC2 (tags Role=worker, ManagerId=<id>). Stateless loop, one image at a time:
  *   receive ImageTask -> download image -> OCR -> upload text to S3 -> send OcrResult -> delete message.
  *
  * Failure handling:
@@ -28,6 +30,12 @@ import java.util.List;
  *    SQS hands it to another worker (or this one) again.
  *  - Worker dies mid-message: same as above, the message reappears after the visibility timeout.
  *  - A rare duplicate result is harmless: the S3 key is deterministic and the manager ignores repeated indexes.
+ *  - Manager dies: nobody would ever terminate this worker, so every minute it checks that its manager
+ *    instance is still running, and terminates itself if not.
+ *
+ * Usage: java -jar worker.jar <managerId> [--local]
+ *   --local: run on your own machine against a manager started with --local <managerId>
+ *   (no EC2 calls: no manager-alive check, no self-terminate).
  */
 public class Worker {
 
@@ -37,20 +45,37 @@ public class Worker {
     private final ImageDownloader downloader = new ImageDownloader();
     private final OcrService ocr = new OcrService();
 
+    private final String managerId;
+    private final boolean local;
     private String tasksQueueUrl;
     private String resultsQueueUrl;
+    private long nextManagerCheck;
+
+    Worker(String managerId, boolean local) {
+        this.managerId = managerId;
+        this.local = local;
+    }
 
     public static void main(String[] args) {
-        new Worker().run();
+        if (args.length < 1 || args.length > 2 || (args.length == 2 && !args[1].equals("--local"))) {
+            System.err.println("Usage: java -jar worker.jar <managerId> [--local]");
+            System.exit(1);
+        }
+        new Worker(args[0], args.length == 2).run();
     }
 
     void run() {
-        tasksQueueUrl = waitForQueueUrl(Config.MANAGER_TO_WORKERS_QUEUE);
-        resultsQueueUrl = waitForQueueUrl(Config.WORKERS_TO_MANAGER_QUEUE);
-        log("Worker started. Listening on " + tasksQueueUrl);
+        tasksQueueUrl = waitForQueueUrl(Config.tasksQueue(managerId));
+        resultsQueueUrl = waitForQueueUrl(Config.resultsQueue(managerId));
+        log("Worker started for manager " + managerId + ". Listening on " + tasksQueueUrl);
 
         while (true) {
             try {
+                if (!local && managerIsGone()) {
+                    log("Manager " + managerId + " is not running any more, terminating this instance");
+                    Ec2Instances.terminate(List.of(InstanceMetadata.instanceId()));
+                    return;
+                }
                 for (Message message : receiveOne()) {
                     handle(message);
                 }
@@ -64,6 +89,16 @@ public class Worker {
                 sleepQuietly(AWS_ERROR_BACKOFF_MS);
             }
         }
+    }
+
+    /** Checks at most once per MANAGER_ALIVE_CHECK_SEC; between checks it assumes the manager is alive. */
+    private boolean managerIsGone() {
+        long now = System.currentTimeMillis();
+        if (now < nextManagerCheck) {
+            return false;
+        }
+        nextManagerCheck = now + Config.MANAGER_ALIVE_CHECK_SEC * 1000L;
+        return !Ec2Instances.isActive(managerId);
     }
 
     private List<Message> receiveOne() {

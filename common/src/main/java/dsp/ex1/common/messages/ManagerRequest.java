@@ -1,7 +1,7 @@
 package dsp.ex1.common.messages;
 
 /**
- * Local App -> Manager (queue: APP_TO_MANAGER_QUEUE).
+ * Local App -> Manager (queue: Config.requestsQueue(managerId)).
  * type NEW_TASK: inputS3Key, replyQueueUrl and workerFilesN are set.
  * type TERMINATE: only type is needed.
  */

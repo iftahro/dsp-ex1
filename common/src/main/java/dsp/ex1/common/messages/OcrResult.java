@@ -1,7 +1,7 @@
 package dsp.ex1.common.messages;
 
 /**
- * Worker -> Manager (queue: WORKERS_TO_MANAGER_QUEUE).
+ * Worker -> Manager (queue: Config.resultsQueue(managerId)).
  * On success, textS3Key points at the extracted text on S3; on failure, error holds a short description.
  * Exactly one of textS3Key / error is set.
  */
