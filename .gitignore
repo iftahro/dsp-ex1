@@ -16,3 +16,6 @@ target/
 
 # Course material (kept local)
 *.pdf
+
+# Submission
+dsp-ex1-submission.zip

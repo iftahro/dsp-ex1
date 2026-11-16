@@ -34,6 +34,7 @@ public final class UserData {
 
     private static String fetch(String jar) {
         return "#!/bin/bash\n"
+                + "export PATH=/usr/local/bin:$PATH\n"
                 + "mkdir -p /opt/dsp && cd /opt/dsp\n"
                 + "until aws s3 cp s3://" + Config.BUCKET + "/" + Config.JARS_PREFIX + jar + " " + jar
                 + "; do sleep 5; done\n";
