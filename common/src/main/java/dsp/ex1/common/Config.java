@@ -10,9 +10,11 @@ public final class Config {
     public static final Region REGION = Region.US_EAST_1;
 
     // TODO: pick a globally unique bucket name. All project files go under it so cleanup is one delete.
-    public static final String BUCKET = "dsp-ex1-ocr-CHANGE-ME";
+    public static final String BUCKET = "dsp-ex1-ocr-271";
     public static final String INPUTS_PREFIX = "inputs/";
     public static final String SUMMARIES_PREFIX = "summaries/";
+    /** OCR text per image: results/<taskId>/<index>.txt */
+    public static final String RESULTS_PREFIX = "results/";
     public static final String JARS_PREFIX = "jars/";
 
     // Shared queues. Each local app also creates its own reply queue: REPLY_QUEUE_PREFIX + <appId>.
