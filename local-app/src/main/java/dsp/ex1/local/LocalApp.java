@@ -27,7 +27,7 @@ public class LocalApp {
         // TODO 1. Create this app's own reply queue (Config.REPLY_QUEUE_PREFIX + taskId).
         // TODO 2. Find an available manager (EC2 tag Role=manager, serving < managerClientsN clients); start one if none.
         // TODO 3. Upload inputFile to S3 under Config.INPUTS_PREFIX.
-        // TODO 4. Send ManagerRequest.newTask(...) to Config.APP_TO_MANAGER_QUEUE.
+        // TODO 4. Send ManagerRequest.newTask(...) to Config.requestsQueue(managerId).
         // TODO 5. Long-poll the reply queue until a TaskDone arrives.
         // TODO 6. Download the summary from S3 and write the HTML to outputFile.
         // TODO 7. If terminate: send ManagerRequest.terminate().
