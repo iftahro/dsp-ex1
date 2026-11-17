@@ -43,7 +43,11 @@ BUILDER="$(aws ec2 run-instances --image-id "$BASE_AMI" --instance-type "$INSTAN
     --query 'Instances[0].InstanceId' --output text)"
 echo "Temporary instance: $BUILDER (installing; it powers off when done)"
 
-# The install takes a few minutes; 'wait instance-stopped' gives up after 10 minutes, so allow two rounds.
+# 'wait instance-stopped' treats "pending" as a failure, so first wait until the instance is running.
+# The install then takes a few minutes; 'wait instance-stopped' gives up after 10 minutes, so allow two
+# rounds (the first round's timeout message is hidden).
+aws ec2 wait instance-running --instance-ids "$BUILDER"
+echo "Instance running; installing software (about 5 minutes)..."
 if ! aws ec2 wait instance-stopped --instance-ids "$BUILDER" 2>/dev/null \
     && ! aws ec2 wait instance-stopped --instance-ids "$BUILDER"; then
     echo "ERROR: the install did not finish. Last lines of the console output:" >&2

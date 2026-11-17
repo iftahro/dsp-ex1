@@ -52,7 +52,7 @@ public final class Config {
     // EC2 launch settings
     public static final String INSTANCE_PROFILE = "LabInstanceProfile";
     // Set by scripts/build-ami.sh (Ubuntu 24.04 + Java 17 + tesseract-ocr + eng data + AWS CLI v2).
-    public static final String AMI_ID = "ami-CHANGE-ME";
+    public static final String AMI_ID = "ami-0fa754ba46548179d";
     public static final String INSTANCE_TYPE = "t3.small";
 
     /** AWS student limit: never more than 19 instances in the account (managers + workers). */

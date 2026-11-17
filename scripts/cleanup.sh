@@ -6,12 +6,19 @@
 #
 #   scripts/cleanup.sh           list, then ask before deleting
 #   scripts/cleanup.sh --check   only list (use after a run to verify everything shut down)
+#   scripts/cleanup.sh --yes     list, then delete without asking (for shells with no keyboard input)
 set -euo pipefail
 source "$(dirname "$0")/env.sh"
 require_aws
 
 CHECK_ONLY=false
-[[ "${1:-}" == "--check" ]] && CHECK_ONLY=true
+ASSUME_YES=false
+case "${1:-}" in
+    --check) CHECK_ONLY=true ;;
+    --yes) ASSUME_YES=true ;;
+    "") ;;
+    *) echo "Usage: $0 [--check | --yes]" >&2; exit 2 ;;
+esac
 
 INSTANCES="$(aws ec2 describe-instances \
     --filters "Name=tag:Role,Values=manager,worker" "Name=instance-state-name,Values=pending,running,stopping,stopped" \
@@ -39,8 +46,14 @@ if $CHECK_ONLY; then
     exit 0
 fi
 
-read -r -p "Delete all of the above? [y/N] " answer
-[[ "$answer" == "y" || "$answer" == "Y" ]] || { echo "Nothing deleted."; exit 0; }
+if ! $ASSUME_YES; then
+    if ! read -r -p "Delete all of the above? [y/N] " answer; then
+        echo
+        echo "No input available, so nothing was deleted. Run again with --yes to delete without asking."
+        exit 1
+    fi
+    [[ "$answer" == "y" || "$answer" == "Y" ]] || { echo "Nothing deleted."; exit 0; }
+fi
 
 if [[ -n "$INSTANCES" ]]; then
     # shellcheck disable=SC2046
