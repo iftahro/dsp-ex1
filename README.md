@@ -8,13 +8,14 @@ Distributed OCR on AWS: a local application, managers and workers that communica
 
 | | |
 |---|---|
-| AMI | `<ami-…>`: Ubuntu 24.04 + OpenJDK 17 + tesseract-ocr 5 (eng) + AWS CLI v2, built by `scripts/build-ami.sh` |
+| AMI | `ami-0d3c2ca30017afda9`: Ubuntu 26.04 + OpenJDK (Ubuntu default) + tesseract-ocr 5 (eng) + AWS CLI v2, built by `scripts/build-ami.sh`, which also runs a real OCR test with `worker.jar` before saving the image |
 | Instance type | `t3.small` (manager and workers) |
-| Input | `<sample input file>` (`<N>` URLs) |
-| `n` (worker-files-n) | `<n>` → `<k>` workers |
-| `manager-clients-n` | `<m>` |
-| Total run time | `<mm:ss>` from start of the local app to the HTML written (manager launched from scratch) |
-| Output | `output/<file>.html` in the submission zip |
+| Input | `input-sample.txt`, the course's sample (24 URLs, 10 different; 5 of them no longer load) |
+| `n` (worker-files-n) | 5 → 5 workers |
+| `manager-clients-n` | 2 |
+| Total run time | **1:33** from start of the local app to the HTML written, with `terminate`; manager and workers launched from scratch |
+| Result | 24 images: 12 with OCR text, 12 with the error (9 × HTTP 404, 3 × host not found) |
+| Output | `output/output-sample.html` in the submission zip |
 
 ## How to run
 
