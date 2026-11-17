@@ -51,12 +51,15 @@ public final class Config {
 
     // EC2 launch settings
     public static final String INSTANCE_PROFILE = "LabInstanceProfile";
-    // TODO: fill in your AMI id (Java 17 + tesseract-ocr + eng tessdata + AWS CLI installed).
-    public static final String AMI_ID = "ami-CHANGE-ME";
-    public static final String INSTANCE_TYPE = "t2.micro";
+    // Set by scripts/build-ami.sh (Ubuntu 24.04 + Java 17 + tesseract-ocr + eng data + AWS CLI v2).
+    public static final String AMI_ID = "ami-0d3c2ca30017afda9";
+    public static final String INSTANCE_TYPE = "t3.small";
 
-    /** AWS student limit: never more than 19 instances in the account (managers + workers). */
-    public static final int MAX_INSTANCES = 19;
+    /**
+     * Never more than 9 instances in the region (managers + workers). The spec's hard cap is 19, but the
+     * Learner Lab allows only 9 running EC2 instances at once in us-east-1 and terminates any extra ones.
+     */
+    public static final int MAX_INSTANCES = 9;
 
     /** How long a worker has to finish one image before SQS hands the message to someone else. */
     public static final int WORKER_VISIBILITY_TIMEOUT_SEC = 120;

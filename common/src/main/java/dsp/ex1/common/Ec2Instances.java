@@ -18,6 +18,8 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Small wrapper over the EC2 calls the manager and the local app need. "Active" = pending or running. */
 public final class Ec2Instances {
@@ -35,9 +37,15 @@ public final class Ec2Instances {
         return describe(filters);
     }
 
-    /** All active instances in the account, whatever their role. Used for the 19-instance limit. */
+    /** All active instances in the account, whatever their role. Used for the instance limit (Config.MAX_INSTANCES). */
     public static int countActive() {
         return describe(List.of(ACTIVE)).size();
+    }
+
+    /** Ids of all active instances in the account, whatever their role. */
+    public static Set<String> activeIds() {
+        return describe(List.of(ACTIVE)).stream().map(Instance::instanceId)
+                .collect(Collectors.toSet());
     }
 
     public static boolean isActive(String instanceId) {

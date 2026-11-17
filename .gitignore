@@ -16,3 +16,10 @@ target/
 
 # Course material (kept local)
 *.pdf
+
+# Submission
+dsp-ex1-submission.zip
+
+# Local test runs (logs and HTML outputs of ad-hoc tests)
+*.log
+out-*.html
