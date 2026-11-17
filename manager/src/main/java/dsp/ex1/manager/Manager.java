@@ -40,13 +40,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    because TERMINATE arrives there too.
  *  - job pool (3): download an input file, queue its ImageTasks, scale workers.
  *  - result listeners (3): record OcrResults; the thread that completes a job writes its summary.
- *  - monitor (1): every 30s re-checks the worker count, so dead workers are replaced.
+ *  - monitor (1): every 30s re-checks the worker count, so dead workers are replaced, and terminates the
+ *    workers once the manager has had no jobs for 5 minutes (the manager itself stays up for new clients).
  */
 public class Manager {
 
     private static final int JOB_THREADS = 3;
     private static final int RESULT_THREADS = 3;
     private static final int MONITOR_PERIOD_SEC = 30;
+    private static final long IDLE_WORKERS_TIMEOUT_MS = 5 * 60 * 1000;
     private static final int TERMINATING_POLL_SEC = 5;
     private static final int SUMMARY_ATTEMPTS = 3;
     private static final long ERROR_BACKOFF_MS = 5_000;
@@ -63,6 +65,8 @@ public class Manager {
     /** Last value written to the Accepting tag; null until the first write. */
     private Boolean acceptingTag;
     private volatile boolean running = true;
+    /** Last time the monitor saw at least one job. Only the monitor thread uses it. */
+    private long lastBusy = System.currentTimeMillis();
 
     private String requestsQueueUrl;
     private String tasksQueueUrl;
@@ -105,7 +109,7 @@ public class Manager {
             resultPool.submit(new ResultCollector(this, resultsQueueUrl));
         }
         if (!local) {
-            monitor.scheduleWithFixedDelay(this::scaleWorkers, MONITOR_PERIOD_SEC, MONITOR_PERIOD_SEC, TimeUnit.SECONDS);
+            monitor.scheduleWithFixedDelay(this::monitorTick, MONITOR_PERIOD_SEC, MONITOR_PERIOD_SEC, TimeUnit.SECONDS);
         }
 
         listenForRequests();
@@ -217,6 +221,27 @@ public class Manager {
     }
 
     /** Never throws: called from the job pool and every 30s by the monitor. */
+    /**
+     * Every 30s: with jobs, make sure there are enough workers (replaces dead ones); with no jobs for
+     * IDLE_WORKERS_TIMEOUT_MS, terminate the workers so they don't cost money while nobody needs them.
+     * A job that arrives later simply launches new workers. Never throws.
+     */
+    private void monitorTick() {
+        long now = System.currentTimeMillis();
+        if (!tasks.isEmpty()) {
+            lastBusy = now;
+            scaleWorkers();
+            return;
+        }
+        if (now - lastBusy >= IDLE_WORKERS_TIMEOUT_MS) {
+            try {
+                scaler.terminateIdle();
+            } catch (Exception e) {
+                log("Idle worker shutdown error: " + e);
+            }
+        }
+    }
+
     void scaleWorkers() {
         if (local) {
             return;

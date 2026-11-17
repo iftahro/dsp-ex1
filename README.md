@@ -105,7 +105,7 @@ A fixed number of threads, however many clients (thread-per-client would not sca
 | Request listener | 1 | Reads its request queue one message at a time, always (TERMINATE arrives there too). |
 | Job pool | 3 | Downloads an input, queues its ImageTasks in SQS batches of 10, scales workers. Several clients are set up in parallel. |
 | Result listeners | 3 | Receive up to 10 results per poll, record them, delete them only after recording. The thread that completes a job writes the summary and replies. |
-| Monitor | 1 | Every 30s re-checks the worker count, so dead workers are replaced even if no new client arrives. |
+| Monitor | 1 | Every 30s re-checks the worker count, so dead workers are replaced even if no new client arrives. After 5 minutes with no jobs it terminates the workers (the manager stays up for new clients). |
 
 Jobs are entries in a `ConcurrentHashMap`; a job's completion is detected exactly once (`putIfAbsent` per index plus
 a compare-and-set), so duplicate results and concurrent listeners are harmless.
@@ -113,9 +113,12 @@ a compare-and-set), so duplicate results and concurrent listeners are harmless.
 ### Worker scaling
 
 Workers needed = Σ over active jobs of ⌈images left / worker-files-n⌉ (each client brings its own n). With k running,
-the manager launches needed − k, never above **19 instances in the account** (managers included). Workers are never
+the manager launches needed − k, never above **9 instances in the region** (managers included). The spec's cap is 19,
+but the Learner Lab allows only 9 running instances at once and terminates any extra ones. Workers are never
 assigned work: they all pull from one queue, so a fast worker simply takes more messages. Workers are stopped on
-TERMINATE, as the spec defines.
+TERMINATE, as the spec defines, and also when the manager has had no jobs for 5 minutes, so idle workers don't use
+the lab budget; a later job just launches new ones. The manager itself stays up: it is one instance, and stopping
+it could race with a client that just picked it.
 
 ### Termination
 
@@ -134,7 +137,7 @@ it.
 
 **Scalability.** Clients are spread over managers by `manager-clients-n`; every manager has its own queues, workers and
 state, so adding clients adds managers instead of loading one. Inside a manager the thread count is fixed and work per
-client is a map entry. SQS and S3 scale on their own. The real ceiling is the 19-instance lab limit; without it, a
+client is a map entry. SQS and S3 scale on their own. The real ceiling is the lab's 9-instance limit; without it, a
 million clients would mean more managers, each with its own worker pool. The local app's work (HTML, text downloads)
 stays on the client.
 

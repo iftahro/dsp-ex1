@@ -16,6 +16,15 @@ set -euxo pipefail
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y openjdk-17-jre-headless tesseract-ocr tesseract-ocr-eng unzip curl
+# Tess4J loads the native libraries by their plain names (libtesseract.so, libleptonica.so); only the
+# -dev packages create those names (the runtime packages ship versioned files only).
+apt-get install -y --no-install-recommends libtesseract-dev libleptonica-dev
+# Older leptonica builds name the library liblept.so; make sure both plain names exist either way.
+cd /usr/lib/x86_64-linux-gnu
+if [ ! -e libleptonica.so ]; then ln -s "$(ls libleptonica.so.* liblept.so.* 2>/dev/null | head -n 1)" libleptonica.so; fi
+if [ ! -e libtesseract.so ]; then ln -s "$(ls libtesseract.so.* 2>/dev/null | head -n 1)" libtesseract.so; fi
+ldconfig
+cd /
 curl -sSfL https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o /tmp/awscliv2.zip
 unzip -q /tmp/awscliv2.zip -d /tmp
 /tmp/aws/install
@@ -24,6 +33,8 @@ java -version
 tesseract --version
 /usr/local/bin/aws --version
 ls /usr/share/tesseract-ocr/5/tessdata/eng.traineddata
+# If either check fails, set -e stops here: the instance never powers off and the build reports an error.
+ls -l /usr/lib/x86_64-linux-gnu/libtesseract.so /usr/lib/x86_64-linux-gnu/libleptonica.so
 shutdown -h now
 '
 

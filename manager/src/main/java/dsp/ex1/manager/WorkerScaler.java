@@ -11,9 +11,9 @@ import java.util.Map;
 
 /**
  * Starts and stops this manager's workers. Called when a job is queued and by the monitor every 30s,
- * so dead workers are replaced even when no new client arrives.
+ * so dead workers are replaced even when no new client arrives, and idle workers are stopped after 5 minutes.
  *
- * Rule (spec): m workers needed, k running -> launch m - k, never above 19 instances in the account.
+ * Rule (spec): m workers needed, k running -> launch m - k, never above Config.MAX_INSTANCES (9, the lab limit).
  * m is summed over all active jobs, each with its own worker-files-n: ceil(images left / n).
  * Workers are never assigned messages; they all pull from the same queue.
  */
@@ -45,6 +45,15 @@ class WorkerScaler {
         }
         List<String> launched = Ec2Instances.launch(toLaunch, UserData.worker(managerId), workerTags);
         Manager.log("Need " + needed + " workers, had " + running + ", launched " + launched.size() + " " + launched);
+    }
+
+    /** Terminates this manager's workers, if there are any. Logs only when it actually terminated some. */
+    synchronized void terminateIdle() {
+        List<String> ids = myWorkers().stream().map(Instance::instanceId).toList();
+        if (!ids.isEmpty()) {
+            Ec2Instances.terminate(ids);
+            Manager.log("No jobs for 5 minutes: terminated " + ids.size() + " idle workers " + ids);
+        }
     }
 
     synchronized void terminateAll() {

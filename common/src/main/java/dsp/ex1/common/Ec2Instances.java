@@ -35,7 +35,7 @@ public final class Ec2Instances {
         return describe(filters);
     }
 
-    /** All active instances in the account, whatever their role. Used for the 19-instance limit. */
+    /** All active instances in the account, whatever their role. Used for the instance limit (Config.MAX_INSTANCES). */
     public static int countActive() {
         return describe(List.of(ACTIVE)).size();
     }
