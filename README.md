@@ -161,7 +161,13 @@ text downloads. Not used in the worker: Tesseract is CPU-bound and a t3.small ha
 from more workers, not more threads per worker.
 
 **Multiple clients.** Each client has its own task id, reply queue and S3 paths; managers handle their clients' jobs
-in parallel. `<describe your concurrent-clients test here>`
+in parallel. We ran three tests on AWS, all on the sample input:
+
+| Test | Setup | Result |
+|---|---|---|
+| 2 clients, 1 manager | `manager-clients-n=2`, `n=5`, B starts 10 s after A, only B sends `terminate` | Both used the same manager, which ran 8 workers (9-instance limit). Both outputs correct. B's TERMINATE did not hurt A: the manager finished A's job first. Total 1:16. |
+| 2 managers | `manager-clients-n=1`, `n=5`, 30 s apart, both `terminate` | B found manager 1 full and launched manager 2. Manager 2 got only the 2 free slots, then grew to 5 workers when manager 1 shut down. Each client terminated its own manager. |
+| 3 managers | `manager-clients-n=1`, `n=12`, 20 s apart, all `terminate` | 3 managers × 2 workers = exactly 9 instances. All three outputs correct; 2:19 for all three. |
 
 **Workers working hard?** All workers of a manager pull from the same queue, one message at a time, so an idle worker
 always takes the next image; nobody waits for a pre-assigned share.
@@ -176,5 +182,10 @@ message, the manager for results, workers for tasks. A slow worker delays only t
 
 - Two apps checking tags at the same instant can both join a manager past its limit, or both launch one
   (the assignment allows assuming no such races).
+- EC2 lists a new instance only a few seconds after it is launched. The manager therefore remembers the workers it
+  launched in the last 3 minutes and counts them itself (otherwise two jobs arriving together launched workers twice).
+  A new manager is tagged full at launch when `manager-clients-n` is 1, so clients that arrive while it boots go
+  elsewhere.
+- When there is no available manager and no room for a new instance, a client waits for room (up to 10 minutes).
 - A manager that is alive but hung is not detected; its clients wait.
 - After a manager crash, the job restarts from scratch on the new manager (images are OCR'd again).

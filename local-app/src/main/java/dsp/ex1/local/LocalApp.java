@@ -29,6 +29,7 @@ import java.util.UUID;
  * Lives for one input file, then exits:
  *  1. create its own reply queue, upload the input to S3;
  *  2. find a manager tagged Accepting=true, or launch one (it gets manager-clients-n as its limit);
+ *     if there is no room for a new instance, wait for room (up to 10 minutes);
  *  3. send NEW_TASK and wait for TaskDone, checking every minute that the manager is still alive;
  *     if it died, resubmit once to another (or a new) manager;
  *  4. download the summary and the texts, write the HTML;
@@ -42,6 +43,9 @@ public class LocalApp {
 
     private static final int MAX_RESUBMITS = 1;
     private static final long MANAGER_CHECK_MS = 60_000;
+    /** When there is no manager and no room to launch one: retry every 20 s, for up to 10 minutes. */
+    private static final long ROOM_RETRY_MS = 20_000;
+    private static final long ROOM_WAIT_MS = 10 * 60_000;
     private static final String LOCAL_MANAGER_ENV = "DSP_LOCAL_MANAGER";
 
     private final String taskId = UUID.randomUUID().toString();
@@ -126,27 +130,40 @@ public class LocalApp {
         }
     }
 
-    /** Any manager tagged Accepting=true, or a newly launched one. Null if none can be launched. */
-    private String findOrLaunchManager(int managerClientsN) {
+    /**
+     * Any manager tagged Accepting=true, or a newly launched one. If there is neither a manager nor room for
+     * a new instance (the 9-instance limit), waits and tries again, up to ROOM_WAIT_MS. Null if it gives up.
+     */
+    private String findOrLaunchManager(int managerClientsN) throws InterruptedException {
         if (localManagerId != null) {
             return localManagerId;
         }
-        List<Instance> available = Ec2Instances.findActive(Map.of(
-                Config.TAG_ROLE, Config.ROLE_MANAGER,
-                Config.TAG_ACCEPTING, "true"));
-        if (!available.isEmpty()) {
-            return available.get(0).instanceId();
+        long giveUpAt = System.currentTimeMillis() + ROOM_WAIT_MS;
+        while (true) {
+            List<Instance> available = Ec2Instances.findActive(Map.of(
+                    Config.TAG_ROLE, Config.ROLE_MANAGER,
+                    Config.TAG_ACCEPTING, "true"));
+            if (!available.isEmpty()) {
+                return available.get(0).instanceId();
+            }
+            if (Ec2Instances.countActive() < Config.MAX_INSTANCES) {
+                // This client is the new manager's first client, so with manager-clients-n = 1 the manager is
+                // full from the start. Without this, clients arriving while it boots would all join it.
+                List<String> launched = Ec2Instances.launch(1, UserData.manager(managerClientsN), Map.of(
+                        Config.TAG_ROLE, Config.ROLE_MANAGER,
+                        Config.TAG_ACCEPTING, String.valueOf(managerClientsN > 1)));
+                log("No available manager; launched " + launched.get(0));
+                return launched.get(0);
+            }
+            if (System.currentTimeMillis() >= giveUpAt) {
+                log("ERROR: no manager became available and there was no room for a new one ("
+                        + Config.MAX_INSTANCES + "-instance limit) for " + ROOM_WAIT_MS / 60_000 + " minutes");
+                return null;
+            }
+            log("No available manager and " + Config.MAX_INSTANCES + " instances already running; "
+                    + "waiting for room...");
+            Thread.sleep(ROOM_RETRY_MS);
         }
-        if (Ec2Instances.countActive() >= Config.MAX_INSTANCES) {
-            log("ERROR: no manager is available and the account already runs "
-                    + Config.MAX_INSTANCES + " instances; try again later");
-            return null;
-        }
-        List<String> launched = Ec2Instances.launch(1, UserData.manager(managerClientsN), Map.of(
-                Config.TAG_ROLE, Config.ROLE_MANAGER,
-                Config.TAG_ACCEPTING, "true"));
-        log("No available manager; launched " + launched.get(0));
-        return launched.get(0);
     }
 
     /**

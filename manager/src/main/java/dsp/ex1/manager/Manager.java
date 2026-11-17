@@ -104,7 +104,8 @@ public class Manager {
         jobStarter = new JobStarter(this, tasksQueueUrl);
         log("Manager " + managerId + " started (max " + managerClientsN + " clients" + (local ? ", local mode" : "") + ")");
 
-        setAcceptingTag(true);
+        // No Accepting tag write here: the client that launched this manager already set it correctly
+        // (false if it alone fills manager-clients-n). The tag changes as jobs are accepted and answered.
         for (int i = 0; i < RESULT_THREADS; i++) {
             resultPool.submit(new ResultCollector(this, resultsQueueUrl));
         }
